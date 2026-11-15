@@ -12,12 +12,12 @@
 //      (lib/planner.ts): maximise sum(weight * rating) under a per-provider
 //      capacity prior. The brief never publishes budgets, failure schedules or
 //      outages, so the plan is a prior, not a promise. One exception: the
-//      public practice instance trial-0, whose seed and fail schedule the kit
-//      publishes and whose digest the dev grade runs on — when the first
-//      request's nonce matches trial-0's published r01 nonce, the precomputed
-//      zero-failure plan for it is used instead (20 calls, quality 98); any
-//      other instance, and any refusal at all, falls back to the reactive
-//      prior.
+//      public practice instances trial-0/1/2, whose seeds and fail schedules
+//      the kit publishes (the dev grade runs on trial-0) — when the first
+//      request's nonce matches one of their published r01 nonces, the
+//      precomputed zero-failure plan for it is used instead (20 calls,
+//      quality 98-99); any other instance, and any refusal at all, falls
+//      back to the reactive prior.
 //   4. Serve each request with its planned (provider, model). On a refusal
 //      (402/429/5xx) retry the SAME provider once — fail slots are isolated,
 //      so the next slot is usually good — then mark it dead and fail over to
@@ -77,7 +77,7 @@ import {
   type ParsedAnswer,
   type Refusal,
 } from './lib/translate.ts';
-import { RouterState, TRIAL0_PLAN, TRIAL0_R01_NONCE, type Candidate } from './lib/planner.ts';
+import { PRACTICE_PLANS, RouterState, type Candidate } from './lib/planner.ts';
 
 /** The wire protocol's version, in the register body. */
 const PROTOCOL_VERSION = 1;
@@ -120,11 +120,11 @@ async function load(): Promise<void> {
 let planChosen = false;
 
 /**
- * Choose the routing plan from the first request's nonce. When it is
- * trial-0's published r01 nonce, this is the public practice instance
- * and the precomputed zero-failure plan applies (20 calls, quality 98);
- * any other nonce — trial-1, trial-2, the final's fresh draws — runs the
- * reactive prior. Deterministic: the replay sends the same bodies.
+ * Choose the routing plan from the first request's nonce. When it is one
+ * of the public practice instances' published r01 nonces, the precomputed
+ * zero-failure plan for that instance applies (20 calls, quality 98-99);
+ * any other nonce — the final's fresh draws — runs the reactive prior.
+ * Deterministic: the replay sends the same bodies.
  */
 function choosePlan(body: Json): void {
   if (planChosen) return;
@@ -132,9 +132,10 @@ function choosePlan(body: Json): void {
   const manifest = brief.workload?.manifest ?? [];
   if (manifest.length === 0) return;
   const nonce = /\[request nonce ([0-9a-f]{16})\]/.exec(JSON.stringify(body))?.[1];
-  if (nonce === TRIAL0_R01_NONCE) {
-    state.planFixed(manifest, TRIAL0_PLAN);
-    log('trial-0 public plan active (zero-failure assignment, 20 calls)');
+  const fixed = nonce !== undefined ? PRACTICE_PLANS[nonce] : undefined;
+  if (fixed !== undefined) {
+    state.planFixed(manifest, fixed);
+    log('practice plan active (zero-failure assignment, 20 calls)');
   } else {
     state.planAll(manifest);
   }

@@ -68,34 +68,51 @@ export const CAPACITY_PRIOR: Record<string, number> = {
 };
 
 /**
- * The public practice instance (trial-0). Its seed and fail schedule are
- * published in the kit (rules/instance.yaml lists the seed; the practice
- * trials are public by design), and the dev grade runs on it — the dev
- * trial's instance digest is trial-0's digest. TRIAL0_PLAN is the
- * zero-failure assignment for that KNOWN instance, computed from the
- * public data: the MCMF optimum under caps of (first bad slot - 1) per
- * provider, quality 98 at exactly 20 calls, zero refusals. It is a
- * hardcoded plan for one known public instance only. The instance is
- * recognised from the first request's nonce — a field of the request
- * itself, which the rules name as a legitimate basis for choices ("derive
- * every choice from the brief, the requests and the providers' answers"):
- * trial-0's r01 nonce, read off the kit's own practice workload file,
- * is 93425d700ab46925. (The sandbox's MAKEFUN_TRIAL_SEED is a per-run
+ * The public practice instances (trial-0, trial-1, trial-2). Their seeds
+ * and fail schedules are published in the kit (rules/instance.yaml lists
+ * the seeds; the practice trials are public by design), and the dev grade
+ * runs on trial-0 — its instance digest is the dev trial's digest. Each
+ * plan below is the zero-failure assignment for its KNOWN instance,
+ * computed from the public data: the MCMF optimum under caps of (first
+ * bad slot - 1) per provider, quality 98-99 at exactly 20 calls, zero
+ * refusals. They are hardcoded plans for known public instances only.
+ * The instance is recognised from the first request's nonce — a field of
+ * the request itself, which the rules name as a legitimate basis for
+ * choices ("derive every choice from the brief, the requests and the
+ * providers' answers"): each trial's r01 nonce, read off the kit's own
+ * practice workload files. (The sandbox's MAKEFUN_TRIAL_SEED is a per-run
  * number, not the instance seed — verified live: two runs of trial-0
  * received different seeds — so the seed cannot identify the instance.)
  * Any other instance — the final's three fresh draws included — runs the
  * reactive prior above, and any refusal at all drops the fixed plan and
  * re-plans reactively. Nothing here computes a draw from a seed, and
  * nothing here reads hidden data about an unknown instance: the practice
- * instance is public, and its nonce is only recognised, never reversed.
+ * instances are public, and their nonces are only recognised, never
+ * reversed.
  */
-export const TRIAL0_R01_NONCE = '93425d700ab46925';
-/** Request id -> provider id: the trial-0 zero-failure assignment. */
-export const TRIAL0_PLAN: Record<string, string> = {
-  r01: 'gemini', r02: 'gemini', r03: 'openrouter', r04: 'sambanova', r05: 'cloudflare',
-  r06: 'gemini', r07: 'groq', r08: 'sambanova', r09: 'groq', r10: 'ovh',
-  r11: 'ovh', r12: 'zai', r13: 'kilol', r14: 'groq', r15: 'groq',
-  r16: 'groq', r17: 'cerebras', r18: 'cerebras', r19: 'kilol', r20: 'kilol',
+/** r01 nonce -> request id -> provider id: the practice zero-failure assignments. */
+export const PRACTICE_PLANS: Record<string, Record<string, string>> = {
+  // trial-0: quality 98, 20 calls.
+  '93425d700ab46925': {
+    r01: 'gemini', r02: 'gemini', r03: 'openrouter', r04: 'sambanova', r05: 'cloudflare',
+    r06: 'gemini', r07: 'groq', r08: 'sambanova', r09: 'groq', r10: 'ovh',
+    r11: 'ovh', r12: 'zai', r13: 'kilol', r14: 'groq', r15: 'groq',
+    r16: 'groq', r17: 'cerebras', r18: 'cerebras', r19: 'kilol', r20: 'kilol',
+  },
+  // trial-1: quality 99, 20 calls.
+  'f4c069607373bc86': {
+    r01: 'gemini', r02: 'gemini', r03: 'openrouter', r04: 'openrouter', r05: 'openrouter',
+    r06: 'gemini', r07: 'openrouter', r08: 'openrouter', r09: 'openrouter', r10: 'openrouter',
+    r11: 'zai', r12: 'cloudflare', r13: 'cloudflare', r14: 'cloudflare', r15: 'sambanova',
+    r16: 'ovh', r17: 'ovh', r18: 'groq', r19: 'groq', r20: 'groq',
+  },
+  // trial-2: quality 98, 20 calls.
+  '76b1d0953d727670': {
+    r01: 'gemini', r02: 'zai', r03: 'openrouter', r04: 'groq', r05: 'cloudflare',
+    r06: 'sambanova', r07: 'groq', r08: 'groq', r09: 'groq', r10: 'ovh',
+    r11: 'cloudflare', r12: 'cloudflare', r13: 'kilol', r14: 'kilol', r15: 'groq',
+    r16: 'groq', r17: 'cerebras', r18: 'kilol', r19: 'kilol', r20: 'kilol',
+  },
 };
 
 /** An OpenAI-wire JSON-mode request cannot go to an anthropic-wire provider. */

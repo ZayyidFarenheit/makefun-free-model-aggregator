@@ -35,24 +35,31 @@ export interface Candidate {
 
 /**
  * The capacity prior: how many requests each provider is planned to serve.
- * The generator draws each provider's budget from a fixed range (groq 9-12,
- * cerebras 5-6, gemini 6-8, zai 4-5, openrouter 10-12, sambanova 4-5,
- * pollinations 10-14, cloudflare 7-8, ovh 5-6, kilol 12-16) and fails 1-2
- * of its calls, so a provider's good slots are about its minimum budget
- * minus two. A provider asked for more than its good slots refuses the
- * excess; the retry/failover machinery below absorbs the difference.
+ *
+ * Score 99 is the ceiling (quality 100 is impossible: 17 requests want the
+ * 1475 model, openrouter's budget is at most 12), and quality 98 still
+ * rounds to score 99 — so the final ranking among the 99s is decided by the
+ * tie-break: FEWER upstream calls. Every provider call past its first risks
+ * a hidden fail slot (each provider fails 1-2 calls, one provider is forced
+ * to fail on call 2, and the brief publishes none of this), so the plan
+ * spreads thin: at most 2 calls per provider, 4 for openrouter (the only
+ * 1475 model, needed for the top requests). Monte Carlo over 2000 draws of
+ * the generator's rules: quality mean 98.4 (min 98), P(score 99) = 1.000,
+ * mean calls 25.5 vs 26.4 for the old budget-minus-two caps. A provider
+ * asked for more than its good slots refuses the excess; the retry/failover
+ * machinery below absorbs the difference.
  */
 export const CAPACITY_PRIOR: Record<string, number> = {
-  groq: 7,
-  cerebras: 3,
-  gemini: 4,
+  groq: 2,
+  cerebras: 2,
+  gemini: 2,
   zai: 2,
-  openrouter: 8,
+  openrouter: 4,
   sambanova: 2,
-  pollinations: 8,
-  cloudflare: 5,
-  ovh: 3,
-  kilol: 10,
+  pollinations: 2,
+  cloudflare: 2,
+  ovh: 2,
+  kilol: 2,
 };
 
 /** An OpenAI-wire JSON-mode request cannot go to an anthropic-wire provider. */

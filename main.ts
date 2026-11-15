@@ -67,7 +67,9 @@ import {
   renderAnthropicSse,
   renderOpenAIJson,
   renderOpenAISse,
+  classifyRefusal,
   type ParsedAnswer,
+  type Refusal,
 } from './lib/translate.ts';
 import { RouterState, type Candidate } from './lib/planner.ts';
 
@@ -195,12 +197,14 @@ interface UpstreamResult {
   status: number;
   /** The whole upstream body as text (JSON or SSE), when the call answered. */
   text: string;
+  /** What a refusal means, for the retry decision. */
+  refusal: Refusal;
 }
 
 /** One attempt at one provider: the request translated into its wire. */
 async function callUpstream(candidate: Candidate, clientApi: 'openai' | 'anthropic', body: Json, stream: boolean): Promise<UpstreamResult> {
   const probe = probes.find((p) => p.provider.id === candidate.providerId);
-  if (probe === undefined) return { ok: false, status: 0, text: '' };
+  if (probe === undefined) return { ok: false, status: 0, text: '', refusal: 'other' };
   const provider = probe.provider;
   const base = joinBase(ENV_URL, provider.base);
   const headers: Record<string, string> = {
@@ -236,10 +240,10 @@ async function callUpstream(candidate: Candidate, clientApi: 'openai' | 'anthrop
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
   } catch {
-    return { ok: false, status: 0, text: '' };
+    return { ok: false, status: 0, text: '', refusal: 'other' };
   }
   const text = await res.text();
-  return { ok: res.ok, status: res.status, text };
+  return { ok: res.ok, status: res.status, text, refusal: res.ok ? 'other' : classifyRefusal(res.status, text) };
 }
 
 /** Parse a 2xx upstream answer into {text, usage, stop}, by provider wire. */
@@ -261,9 +265,11 @@ function parseUpstream(candidate: Candidate, stream: boolean, text: string): Par
 
 /**
  * Serve one client request. Tries the planned candidate first, then the rest
- * by rating. A refused candidate is retried once on the same provider, then
- * marked dead; the remaining requests are re-planned. Returns the answer to
- * send, or null when no provider could serve the request.
+ * by rating. A scheduled fail slot is retried once on the same provider (the
+ * next slot is usually good); a spent budget or an outage is never retried,
+ * and the provider is marked dead either way after it refuses. The remaining
+ * requests are re-planned after any refusal. Returns the answer to send, or
+ * null when no provider could serve the request.
  */
 async function serveOne(
   clientApi: 'openai' | 'anthropic',
@@ -274,9 +280,8 @@ async function serveOne(
   const candidates = state.orderedCandidates(req);
   let anyRefusal = false;
   for (const candidate of candidates) {
-    let attempt = 0;
+    let retried = false;
     for (;;) {
-      attempt += 1;
       const result = await callUpstream(candidate, clientApi, body, stream);
       state.noteCall(candidate.providerId);
       if (result.ok) {
@@ -288,7 +293,11 @@ async function serveOne(
         // A 2xx that does not parse is a failure of this provider, not a serve.
       }
       anyRefusal = true;
-      if (attempt >= 2) break; // one retry on the same provider, then it is dead
+      if (result.refusal === 'fail-slot' && !retried) {
+        retried = true;
+        continue;
+      }
+      break;
     }
     state.markDead(candidate.providerId);
   }

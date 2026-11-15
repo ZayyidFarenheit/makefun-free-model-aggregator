@@ -463,6 +463,35 @@ export function parseOpenAISse(text: string): ParsedAnswer | null {
   return { text: out, inputTokens: input, outputTokens: output, stop };
 }
 
+// ---------------------------------------------------------------- Refusal classification
+
+/**
+ * What a provider's refusal means, read off its error message (the same
+ * string the env writes for all three wires, under error.message):
+ *   "<name>'s free-tier budget is spent" -> the budget is gone; every later
+ *     call refuses too, so retrying is a wasted call.
+ *   "<name> is out" -> the provider's outage has begun; same, no retry.
+ *   "<name> refused this call" -> one of its scheduled fail slots; the next
+ *     slot is usually good, so retrying once is worth a call.
+ * Anything else (a 401/400, an unparsable body) is 'other': never retry it.
+ */
+export type Refusal = 'fail-slot' | 'budget' | 'outage' | 'other';
+
+export function classifyRefusal(status: number, text: string): Refusal {
+  if (status !== 402 && status !== 429) return 'other';
+  let message = '';
+  try {
+    const body: unknown = JSON.parse(text);
+    if (isRecord(body) && isRecord(body.error) && typeof body.error.message === 'string') message = body.error.message;
+  } catch {
+    message = '';
+  }
+  if (message.includes('budget is spent')) return 'budget';
+  if (message.includes('refused this call')) return 'fail-slot';
+  if (/ is out$/.test(message)) return 'outage';
+  return 'other';
+}
+
 // ---------------------------------------------------------------- Client renderers
 
 const SSE_DELTA_CHARS = 13;

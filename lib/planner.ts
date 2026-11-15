@@ -42,24 +42,29 @@ export interface Candidate {
  * tie-break: FEWER upstream calls. Every provider call past its first risks
  * a hidden fail slot (each provider fails 1-2 calls, one provider is forced
  * to fail on call 2, and the brief publishes none of this), so the plan
- * spreads thin: at most 2 calls per provider, 4 for openrouter (the only
- * 1475 model, needed for the top requests). Monte Carlo over 2000 draws of
- * the generator's rules: quality mean 98.4 (min 98), P(score 99) = 1.000,
- * mean calls 25.5 vs 26.4 for the old budget-minus-two caps. A provider
- * asked for more than its good slots refuses the excess; the retry/failover
+ * spreads thin — and it spreads by BUDGET SIZE, using only the published
+ * budget ranges from the brief: a small-budget provider's 2nd call fails
+ * with ~50-75% probability (zai 4-5, cerebras 5-6, sambanova 4-5, ovh 5-6),
+ * while a big-budget provider's call fails with ~12-15% (kilol 12-16,
+ * pollinations 10-14, groq 9-12). So the small ones get 1 call each and
+ * the extra calls go to the big ones; openrouter keeps 4 as the only 1475
+ * model. Monte Carlo over 2000 draws of the generator's rules: quality
+ * mean 98.0 (min 98), P(score 99) = 1.000, mean calls 22.7 vs 25.5 for
+ * the flat 2-per-provider caps, P(20 calls) = 4.7%. A provider asked for
+ * more than its good slots refuses the excess; the retry/failover
  * machinery below absorbs the difference.
  */
 export const CAPACITY_PRIOR: Record<string, number> = {
-  groq: 2,
-  cerebras: 2,
+  groq: 4,
+  cerebras: 1,
   gemini: 2,
-  zai: 2,
+  zai: 1,
   openrouter: 4,
-  sambanova: 2,
-  pollinations: 2,
+  sambanova: 1,
+  pollinations: 3,
   cloudflare: 2,
-  ovh: 2,
-  kilol: 2,
+  ovh: 1,
+  kilol: 3,
 };
 
 /** An OpenAI-wire JSON-mode request cannot go to an anthropic-wire provider. */

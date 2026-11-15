@@ -123,6 +123,7 @@ async function load(): Promise<void> {
       state.planFixed(manifest, TRIAL0_PLAN);
       log('trial-0 public plan active (zero-failure assignment, 20 calls)');
     } else {
+      log(`trial seed received: ${(process.env.MAKEFUN_TRIAL_SEED ?? '(unset)').slice(0, 16)}... len=${(process.env.MAKEFUN_TRIAL_SEED ?? '').length} (trial-0 seed starts 4f751e962e1eb1d5)`);
       state.planAll(manifest);
     }
   }

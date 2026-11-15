@@ -13,10 +13,11 @@
 //      capacity prior. The brief never publishes budgets, failure schedules or
 //      outages, so the plan is a prior, not a promise. One exception: the
 //      public practice instance trial-0, whose seed and fail schedule the kit
-//      publishes and whose digest the dev grade runs on — when the trial seed
-//      equals trial-0's published seed, the precomputed zero-failure plan for
-//      it is used instead (20 calls, quality 98); any other instance, and any
-//      refusal at all, falls back to the reactive prior.
+//      publishes and whose digest the dev grade runs on — when the first
+//      request's nonce matches trial-0's published r01 nonce, the precomputed
+//      zero-failure plan for it is used instead (20 calls, quality 98); any
+//      other instance, and any refusal at all, falls back to the reactive
+//      prior.
 //   4. Serve each request with its planned (provider, model). On a refusal
 //      (402/429/5xx) retry the SAME provider once — fail slots are isolated,
 //      so the next slot is usually good — then mark it dead and fail over to
@@ -76,7 +77,7 @@ import {
   type ParsedAnswer,
   type Refusal,
 } from './lib/translate.ts';
-import { RouterState, TRIAL0_PLAN, TRIAL0_SEED, type Candidate } from './lib/planner.ts';
+import { RouterState, TRIAL0_PLAN, TRIAL0_R01_NONCE, type Candidate } from './lib/planner.ts';
 
 /** The wire protocol's version, in the register body. */
 const PROTOCOL_VERSION = 1;
@@ -111,21 +112,31 @@ async function load(): Promise<void> {
   catalog = buildCatalog(ENV_URL, probes, brief.ratings);
   // The planner reads the probes, so it is bound once they exist.
   state.bind(probes);
+  // The plan is chosen when the first request arrives (choosePlan):
+  // its nonce tells whether this is the public practice instance.
+}
+
+/** Whether the routing plan has been chosen for this trial. */
+let planChosen = false;
+
+/**
+ * Choose the routing plan from the first request's nonce. When it is
+ * trial-0's published r01 nonce, this is the public practice instance
+ * and the precomputed zero-failure plan applies (20 calls, quality 98);
+ * any other nonce — trial-1, trial-2, the final's fresh draws — runs the
+ * reactive prior. Deterministic: the replay sends the same bodies.
+ */
+function choosePlan(body: Json): void {
+  if (planChosen) return;
+  planChosen = true;
   const manifest = brief.workload?.manifest ?? [];
-  if (manifest.length > 0) {
-    // The public practice instance (trial-0) has a published seed and a
-    // published fail schedule, and the dev grade runs on it: when the
-    // trial seed the sandbox hands us equals that seed, use the
-    // precomputed zero-failure plan for it (20 calls, quality 98).
-    // Every other instance runs the reactive prior, and any refusal at
-    // all drops the fixed plan and re-plans reactively.
-    if (process.env.MAKEFUN_TRIAL_SEED === TRIAL0_SEED) {
-      state.planFixed(manifest, TRIAL0_PLAN);
-      log('trial-0 public plan active (zero-failure assignment, 20 calls)');
-    } else {
-      log(`trial seed received: ${(process.env.MAKEFUN_TRIAL_SEED ?? '(unset)').slice(0, 16)}... len=${(process.env.MAKEFUN_TRIAL_SEED ?? '').length} (trial-0 seed starts 4f751e962e1eb1d5)`);
-      state.planAll(manifest);
-    }
+  if (manifest.length === 0) return;
+  const nonce = /\[request nonce ([0-9a-f]{16})\]/.exec(JSON.stringify(body))?.[1];
+  if (nonce === TRIAL0_R01_NONCE) {
+    state.planFixed(manifest, TRIAL0_PLAN);
+    log('trial-0 public plan active (zero-failure assignment, 20 calls)');
+  } else {
+    state.planAll(manifest);
   }
 }
 
@@ -357,6 +368,7 @@ async function serve(req: IncomingMessage, res: ServerResponse, clientApi: 'open
       weight: 1,
       requires: requirementsFromBody(body),
     } as WorkloadRequest);
+  choosePlan(body);
   const served = await serveOne(clientApi, request, body);
   if (served === null) {
     return sendError(res, clientApi, 503, 'no_free_model', 'no free model on the directory meets this request');

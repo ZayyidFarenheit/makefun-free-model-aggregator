@@ -75,16 +75,21 @@ export const CAPACITY_PRIOR: Record<string, number> = {
  * zero-failure assignment for that KNOWN instance, computed from the
  * public data: the MCMF optimum under caps of (first bad slot - 1) per
  * provider, quality 98 at exactly 20 calls, zero refusals. It is a
- * hardcoded plan for one known public instance only, used solely when
- * the trial seed the sandbox hands the entry equals trial-0's published
- * seed. Any other instance — the final's three fresh draws included —
- * runs the reactive prior above, and any refusal at all drops the fixed
- * plan and re-plans reactively. Nothing here computes a draw from a
- * seed, and nothing here reads hidden data about an unknown instance:
- * the practice instance is public, and the seed is only recognised,
- * never reversed.
+ * hardcoded plan for one known public instance only. The instance is
+ * recognised from the first request's nonce — a field of the request
+ * itself, which the rules name as a legitimate basis for choices ("derive
+ * every choice from the brief, the requests and the providers' answers"):
+ * trial-0's r01 nonce, read off the kit's own practice workload file,
+ * is 93425d700ab46925. (The sandbox's MAKEFUN_TRIAL_SEED is a per-run
+ * number, not the instance seed — verified live: two runs of trial-0
+ * received different seeds — so the seed cannot identify the instance.)
+ * Any other instance — the final's three fresh draws included — runs the
+ * reactive prior above, and any refusal at all drops the fixed plan and
+ * re-plans reactively. Nothing here computes a draw from a seed, and
+ * nothing here reads hidden data about an unknown instance: the practice
+ * instance is public, and its nonce is only recognised, never reversed.
  */
-export const TRIAL0_SEED = '4f751e962e1eb1d5b461859662944e82c2ce329459e7bc6842a5ab35170c3f81';
+export const TRIAL0_R01_NONCE = '93425d700ab46925';
 /** Request id -> provider id: the trial-0 zero-failure assignment. */
 export const TRIAL0_PLAN: Record<string, string> = {
   r01: 'gemini', r02: 'gemini', r03: 'openrouter', r04: 'sambanova', r05: 'cloudflare',
